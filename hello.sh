@@ -1,10 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>  
-#include <sys/types.h> 
-#include <sys/wait.h>   
-#include <dirent.h>      // Needed for chdir()
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <dirent.h>
+#include <fcntl.h>        // Needed for open() flags
 
 #define MAX_INPUT 1024
 #define MAX_ARGS 64
@@ -44,7 +45,33 @@ int main() {
                     perror("cd failed");
                 }
             }
-            continue;  // Skip fork/exec for cd
+            continue;
+        }
+
+        // Redirection variables
+        int input_redirect = 0;
+        int output_redirect = 0;
+        int append_redirect = 0;
+        char *input_file = NULL;
+        char *output_file = NULL;
+
+        for (int j = 0; args[j] != NULL; j++) {
+            if (strcmp(args[j], "<") == 0) {
+                input_redirect = 1;
+                input_file = args[j+1];
+                args[j] = NULL;  // Remove the '<' from args
+                break;
+            } else if (strcmp(args[j], ">") == 0) {
+                output_redirect = 1;
+                output_file = args[j+1];
+                args[j] = NULL;  // Remove the '>' from args
+                break;
+            } else if (strcmp(args[j], ">>") == 0) {
+                append_redirect = 1;
+                output_file = args[j+1];
+                args[j] = NULL;  // Remove the '>>' from args
+                break;
+            }
         }
 
         pid_t pid = fork();
@@ -53,6 +80,34 @@ int main() {
             perror("fork failed");
             exit(1);
         } else if (pid == 0) {
+            // Input redirection
+            if (input_redirect) {
+                int fd = open(input_file, O_RDONLY);
+                if (fd < 0) {
+                    perror("open input file failed");
+                    exit(1);
+                }
+                dup2(fd, STDIN_FILENO);
+                close(fd);
+            }
+
+            // Output redirection
+            if (output_redirect || append_redirect) {
+                int flags = O_WRONLY | O_CREAT;
+                if (append_redirect) {
+                    flags |= O_APPEND;
+                } else {
+                    flags |= O_TRUNC;
+                }
+                int fd = open(output_file, flags, 0644);
+                if (fd < 0) {
+                    perror("open output file failed");
+                    exit(1);
+                }
+                dup2(fd, STDOUT_FILENO);
+                close(fd);
+            }
+
             execvp(args[0], args);
             perror("exec failed");
             exit(1);
