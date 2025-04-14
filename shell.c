@@ -5,7 +5,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <dirent.h>
-#include <fcntl.h>        // Needed for open() flags
+#include <fcntl.h>       
 
 #include <signal.h>
 
