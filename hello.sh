@@ -6,7 +6,9 @@
 #include <sys/wait.h>
 #include <dirent.h>
 #include <fcntl.h>        // Needed for open() flags
+
 #include <signal.h>
+
 
 #define MAX_INPUT 1024
 #define MAX_ARGS 64
@@ -86,6 +88,35 @@ int main() {
                 args[j] = NULL;
                 break;
             }
+
+            continue;
+        }
+
+        // Redirection variables
+        int input_redirect = 0;
+        int output_redirect = 0;
+        int append_redirect = 0;
+        char *input_file = NULL;
+        char *output_file = NULL;
+
+        for (int j = 0; args[j] != NULL; j++) {
+            if (strcmp(args[j], "<") == 0) {
+                input_redirect = 1;
+                input_file = args[j+1];
+                args[j] = NULL;  // Remove the '<' from args
+                break;
+            } else if (strcmp(args[j], ">") == 0) {
+                output_redirect = 1;
+                output_file = args[j+1];
+                args[j] = NULL;  // Remove the '>' from args
+                break;
+            } else if (strcmp(args[j], ">>") == 0) {
+                append_redirect = 1;
+                output_file = args[j+1];
+                args[j] = NULL;  // Remove the '>>' from args
+                break;
+            }
+
         }
 
         child_pid = fork();
@@ -93,8 +124,12 @@ int main() {
         if (child_pid < 0) {
             perror("fork failed");
             exit(1);
+
         } else if (child_pid == 0) {
             signal(SIGINT, SIG_DFL); // Let child handle Ctrl+C
+
+
+        } else if (pid == 0) {
 
             // Input redirection
             if (input_redirect) {
@@ -110,10 +145,18 @@ int main() {
             // Output redirection
             if (output_redirect || append_redirect) {
                 int flags = O_WRONLY | O_CREAT;
+
                 if (append_redirect)
                     flags |= O_APPEND;
                 else
                     flags |= O_TRUNC;
+
+                if (append_redirect) {
+                    flags |= O_APPEND;
+                } else {
+                    flags |= O_TRUNC;
+                }
+
                 int fd = open(output_file, flags, 0644);
                 if (fd < 0) {
                     perror("open output file failed");
